@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>URL Shortener</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+    .container {
+      background: #fff;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      max-width: 600px;
+      width: 100%;
+      padding: 40px;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 24px;
+      color: #333;
+      font-size: 2rem;
+    }
+    .form-group {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 32px;
+    }
+    input[type="url"] {
+      flex: 1;
+      padding: 14px 16px;
+      border: 2px solid #e0e0e0;
+      border-radius: 10px;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+    input[type="url"]:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    button {
+      padding: 14px 24px;
+      background: #667eea;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    button:hover { background: #5568d3; }
+    button:active { transform: scale(0.98); }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .result {
+      text-align: center;
+      margin-bottom: 24px;
+      padding: 16px;
+      background: #f0f4ff;
+      border-radius: 10px;
+      display: none;
+    }
+    .result.visible { display: block; }
+    .result a {
+      color: #667eea;
+      font-weight: 600;
+      text-decoration: none;
+      word-break: break-all;
+    }
+    .result a:hover { text-decoration: underline; }
+    .error {
+      color: #c0392b;
+      text-align: center;
+      margin-bottom: 16px;
+      display: none;
+    }
+    .error.visible { display: block; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    th, td {
+      text-align: left;
+      padding: 12px;
+      border-bottom: 1px solid #eee;
+      font-size: 0.95rem;
+    }
+    th {
+      color: #888;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.05em;
+    }
+    td a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 500;
+    }
+    td a:hover { text-decoration: underline; }
+    .empty {
+      text-align: center;
+      color: #999;
+      padding: 24px;
+    }
+    .section-title {
+      font-size: 1.1rem;
+      color: #444;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔗 URL Shortener</h1>
+    <div class="form-group">
+      <input type="url" id="urlInput" placeholder="Enter a URL to shorten..." required>
+      <button id="shortenBtn">Shorten</button>
+    </div>
+    <div id="error" class="error"></div>
+    <div id="result" class="result">
+      <p>Your short URL:</p>
+      <a id="shortLink" href="#" target="_blank"></a>
+    </div>
+    <div class="section-title">Recent Shortens</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Original URL</th>
+          <th>Hits</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody id="recentTable"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const urlInput = document.getElementById('urlInput');
+    const shortenBtn = document.getElementById('shortenBtn');
+    const resultDiv = document.getElementById('result');
+    const shortLink = document.getElementById('shortLink');
+    const errorDiv = document.getElementById('error');
+    const recentTable = document.getElementById('recentTable');
+
+    async function loadRecent() {
+      try {
+        const res = await fetch('/recent');
+        const data = await res.json();
+        renderRecent(data);
+      } catch (e) {
+        recentTable.innerHTML = '<tr><td colspan="4" class="empty">Failed to load recent URLs</td></tr>';
+      }
+    }
+
+    function renderRecent(records) {
+      if (!records || records.length === 0) {
+        recentTable.innerHTML = '<tr><td colspan="4" class="empty">No URLs shortened yet</td></tr>';
+        return;
+      }
+      recentTable.innerHTML = records.map(r => {
+        const short = `${location.origin}/${r.code}`;
+        const date = new Date(r.created_at).toLocaleString();
+        const displayUrl = r.url.length > 40 ? r.url.slice(0, 40) + '…' : r.url;
+        return `<tr>
+          <td><a href="${short}" target="_blank">${r.code}</a></td>
+          <td><a href="${r.url}" target="_blank" title="${r.url}">${displayUrl}</a></td>
+          <td>${r.hits}</td>
+          <td>${date}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function shorten() {
+      const url = urlInput.value.trim();
+      if (!url) return;
+
+      errorDiv.classList.remove('visible');
+      resultDiv.classList.remove('visible');
+      shortenBtn.disabled = true;
+      shortenBtn.textContent = 'Shortening...';
+
+      try {
+        const res = await fetch('/shorten', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || 'Failed to shorten URL');
+        }
+
+        const data = await res.json();
+        const short = `${location.origin}/${data.code}`;
+        shortLink.href = short;
+        shortLink.textContent = short;
+        resultDiv.classList.add('visible');
+        urlInput.value = '';
+        loadRecent();
+      } catch (e) {
+        errorDiv.textContent = e.message;
+        errorDiv.classList.add('visible');
+      } finally {
+        shortenBtn.disabled = false;
+        shortenBtn.textContent = 'Shorten';
+      }
+    }
+
+    shortenBtn.addEventListener('click', shorten);
+    urlInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') shorten();
+    });
+
+    loadRecent();
+  </script>
+</body>
+</html>
