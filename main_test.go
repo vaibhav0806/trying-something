@@ -33,6 +33,7 @@ func TestShortenAndRedirect(t *testing.T) {
 	mux.HandleFunc("GET /{code}", redirectHandler)
 	mux.HandleFunc("GET /stats/{code}", statsHandler)
 	mux.HandleFunc("GET /recent", recentHandler)
+	mux.HandleFunc("GET /healthz", healthzHandler)
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
@@ -153,6 +154,30 @@ func TestRedirectNotFound(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("expected 404, got %d", resp.StatusCode)
+	}
+}
+
+func TestHealthz(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", healthzHandler)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	resp, err := http.Get(server.URL + "/healthz")
+	if err != nil {
+		t.Fatalf("failed to get healthz: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+	body := make([]byte, 2)
+	resp.Body.Read(body)
+	if string(body) != "ok" {
+		t.Fatalf("expected body 'ok', got %q", string(body))
 	}
 }
 

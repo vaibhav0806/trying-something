@@ -176,6 +176,11 @@ func statsHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(record)
 }
 
+func healthzHandler(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
+}
+
 func recentHandler(w http.ResponseWriter, r *http.Request) {
 	rows, err := db.Query("SELECT code, url, hits, created_at FROM urls ORDER BY created_at DESC LIMIT 10")
 	if err != nil {
@@ -209,6 +214,7 @@ func main() {
 	mux.HandleFunc("POST /shorten", shortenHandler)
 	mux.HandleFunc("GET /stats/{code}", statsHandler)
 	mux.HandleFunc("GET /recent", recentHandler)
+	mux.HandleFunc("GET /healthz", healthzHandler)
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "static/index.html")
 	})
